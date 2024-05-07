@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="jquery.min.js"></script>
+		<link rel="stylesheet" href="bulma.min.css">
+		<title>COQ Search</title>
+	</head>
+	<body>
+		<nav class="navbar has-shadow is-flex is-align-items-center" role="navigation">
+			<a class="navbar-menu is-mobile is-flex-grow-0">
+				<div class="navbar-start is-flex is-align-items-center">
+					<a class="navbar-item" href="/">Search</a>
+					<a class="navbar-item" href="/help">Help</a>
+					<a class="navbar-item" href="/about">About</a>
+				</div>
+				<div class="navbar-end is-flex is-align-content-stretch is-justify-content-flex-end" style="margin-left:auto;">
+					<div class="navbar-item">
+						<div class="buttons">
+							<button class="button is-primary" onclick="commentOpen()"><strong>Give Feedback</strong></button>
+						</div>
+					</div>
+				</div>
+			</a>
+		</nav>
+		<div class="container">
+			<div class="box">
+				<section class="section">
+					<h1 class="title">About</h1>
+					<div class="content">
+						This project makes use of many open source projects. A incomplete list follows:
+						<ul>
+							<li> Bulma (for styling these pages)</li>
+							<li> JQuery </li>
+							<li> HuggingFace transformers </li>
+							<li> Coq Platform </li>
+							<li> PRISM </li>
+							<li> python-coqtop </li>
+						</ul>
+					</div>
+				</section>
+			</div>
+		</div>
+		<div id="comment-modal" class="modal">
+			<div class="modal-background" onclick="commentClose()"></div>
+			<div class="modal-card">
+				<header class="modal-card-head"><strong class="modal-card-title">Leave Feedback</strong></header>
+				<section class="modal-card-body">
+					Positive and/or constructive feedback encouraged!<br>
+					Feedback will only be associated with your UUID and cohort<br> unless you choose to provide more information.<br>
+					You will not receive a reply unless you provide means to do so.<br>
+					<div class="field"><input class="input" id="commentBox" type="textarea"></div>
+					<div class="field"><button class="button" id="commentSubmitButton" onclick="commentSubmit()">Submit</button></div>
+				</section>
+				<footer class="modal-card-foot"></footer>
+			</div>
+			<button class="modal-close is-large" onclick="commentClose()"></button>
+		</div>
+		<script>
+			var commentModal = document.getElementById("comment-modal");
+			function commentOpen() {
+				commentModal.setAttribute("class","modal is-active");
+			}
+
+			function commentClose() {
+				commentModal.setAttribute("class","modal");
+			}
+
+			function commentSubmit() {
+				var commentBox = document.getElementById("commentBox");
+				var btn = document.getElementById("commentSubmitButton");
+				btn.setAttribute("class","button is-loading");
+				$.post("/api/feedback",commentBox.value,function() {
+					btn.setAttribute("class","button");
+					commentBox.value = "";
+					commentClose();
+				});
+			}
+		</script>
+	</body>
+</html>
+
+

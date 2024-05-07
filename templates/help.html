@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="jquery.min.js"></script>
+		<link rel="stylesheet" href="bulma.min.css">
+		<title>COQ Search</title>
+	</head>
+	<body>
+		<nav class="navbar has-shadow is-flex is-align-items-center" role="navigation">
+			<a class="navbar-menu is-mobile is-flex-grow-0">
+				<div class="navbar-start is-flex is-align-items-center">
+					<a class="navbar-item" href="/">Search</a>
+					<a class="navbar-item" href="/help">Help</a>
+					<a class="navbar-item" href="/about">About</a>
+				</div>
+				<div class="navbar-end is-flex is-align-content-stretch is-justify-content-flex-end" style="margin-left:auto;">
+					<div class="navbar-item">
+						<div class="buttons">
+							<button class="button is-primary" onclick="commentOpen()"><strong>Give Feedback</strong></button>
+						</div>
+					</div>
+				</div>
+			</a>
+		</nav>
+		<div class="container">
+			<div class="box">
+				<section class="section">
+					<h1 class="title">FAQ</h1>
+					<div class="content">
+						<h3>What is this?</h3>
+						<br>
+						ProofDB is a natural language search engine for querying a large corpus of theorems in Coq.
+						<h3>Which theorems, specifically?</h3>
+						<br>
+						Currently, ProofDB queries theorems defined in an installation of the community beloved <a href="https://github.com/coq/platform">Coq Platform</a>. This includes many developments beyond the standard library, such as mathcomp.
+						<h3>How do I use this?</h3>
+						<br>
+						This is a research preview of ProofDB, and we're still figuring out the interface and best practices. Here are some typically effective searching strategies, though:
+						<ul>
+							<li>Search for topics you'd like lemmas about in concise plain english, e.g. "matrix transpose" or "group inverse"</li>
+							<li>Search for lemmas symbolically: due to the composition of the training data for the search engine, ProofDB can make use of common notations as hints to find relevant theorems, e.g. "a+b=b+a" or "a*a^-1=1"</li>
+							<li>A combination of the above.</li>
+						</ul>
+						This is still a work in progress, so the most "relevant" theorem might not be the first one!
+						<h3>I'm getting results that seem relevant but for strange/niche types.</h3>
+						You can make use of filters (explained below) to limit results to theorems that operate on the types you're working with. Alternatively, we try to offer automatic "search refining" questions when possible. Answering these to the best of your knowledge will iteratively refine the search to relevant libraries and types.
+					</div>
+				</section>
+				<section class="section">
+					<h1 class="title">Filters</h1>
+					<div class="content">
+						ProofDB by default uses a fuzzy neural search to find relevant theorems. This is helpful when you're not sure exactly what you're looking for. However, the neural search can be frustrating when you DO know very specific things about the theorem you're searching for.
+						<br>
+						<br>
+						To complement ProofDB's fuzzy functionality we offer a set of filters that restrict the search results to those that satisfy a particular predicate. The syntax for a filter is `{filter_name}:"{filter_argument}"` appended to the end of a search. <strong>Any filter's behavior can be negated by prefixing the filter name with a '-'. You can use as many filters as you want and all will be conjunctively applied to the search results.</strong>
+						<br>
+						<br>
+						What follows is a list of defined filters:
+						<ul>
+							<li> The <code>in</code> filter filters the results to theorems whose location is prefixed with the filter's argument. For instance, <code>in:"Coq"</code> will cause a search to only show results from within the Coq standard library.</li>
+							<li> The <code>arg</code> filter filters the results to theorems that have at least one of a particular argument. For instance, <code>arg:"nat"</code> will cause a search to only show results that take a natural number as an argument. <strong>Warning: due to the semantics of Coq modules and imports, some types may have a module prefix that typically does not appear in normal environments. If in doubt, this filter supports wildcards to match against arbitrary prefixes, suffixes, and infixes in arguments. <code>arg:"*Q*"</code> will match any result with an argument that contains a Q.</strong> </li>
+						</ul>
+					</div>
+				</section>
+			</div>
+		</div>
+		<div id="comment-modal" class="modal">
+			<div class="modal-background" onclick="commentClose()"></div>
+			<div class="modal-card">
+				<header class="modal-card-head"><strong class="modal-card-title">Leave Feedback</strong></header>
+				<section class="modal-card-body">
+					Positive and/or constructive feedback encouraged!<br>
+					Feedback will only be associated with your UUID and cohort<br> unless you choose to provide more information.<br>
+					You will not receive a reply unless you provide means to do so.<br>
+					<div class="field"><input class="input" id="commentBox" type="textarea"></div>
+					<div class="field"><button class="button" id="commentSubmitButton" onclick="commentSubmit()">Submit</button></div>
+				</section>
+				<footer class="modal-card-foot"></footer>
+			</div>
+			<button class="modal-close is-large" onclick="commentClose()"></button>
+		</div>
+		<script>
+			var commentModal = document.getElementById("comment-modal");
+			function commentOpen() {
+				commentModal.setAttribute("class","modal is-active");
+			}
+
+			function commentClose() {
+				commentModal.setAttribute("class","modal");
+			}
+
+			function commentSubmit() {
+				var commentBox = document.getElementById("commentBox");
+				var btn = document.getElementById("commentSubmitButton");
+				btn.setAttribute("class","button is-loading");
+				$.post("/api/feedback",commentBox.value,function() {
+					btn.setAttribute("class","button");
+					commentBox.value = "";
+					commentClose();
+				});
+			}
+		</script>
+	</body>
+</html>
+
+

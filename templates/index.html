@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<script src="jquery.min.js"></script>
+		<link rel="stylesheet" href="bulma.min.css">
+		<title>COQ Search</title>
+	</head>
+	<body>
+		<nav class="navbar has-shadow is-flex is-align-items-center" role="navigation">
+			<a class="navbar-menu is-mobile is-flex-grow-0">
+				<div class="navbar-start is-flex is-align-items-center">
+					<a class="navbar-item" href="/">Search</a>
+					<a class="navbar-item" href="/help">Help</a>
+					<a class="navbar-item" href="/about">About</a>
+				</div>
+				<div class="navbar-end is-flex is-align-content-stretch is-justify-content-flex-end" style="margin-left:auto;">
+					<div class="navbar-item">
+						<div class="buttons">
+							<button class="button is-primary" onclick="commentOpen()"><strong>Give Feedback</strong></button>
+						</div>
+					</div>
+				</div>
+			</a>
+		</nav>
+		<div class="container">
+			<div class="box">
+				<label class="label">Search Query</label>
+				<div class="field is-grouped">
+					<p class="control is-flex-grow-1"><input class="input" id="searchBox" type="text"></p>
+					<p class="control"><button class="button is-primary" onclick="search()" id="searchButton">Search</button></p>
+				</div>
+			</div>
+
+			<div id="refineBox" class="box is-flex is-hidden">
+				<label class="label">Refine Search:&nbsp;</label>
+				<p id="filterQuestion"></p>
+				<div class="field is-grouped is-justify-self-right is-flex-grow-1 is-justify-content-right">
+					<p class="control"><button class="button is-primary" onclick="promptYes()" >Yes</button></p>
+					<p class="control"><button class="button is-danger" onclick="promptNo()" >No</button></p>
+					<p class="control"><button class="button" onclick="promptFilter()">Not Sure</button></p>
+				</div>
+			</div>
+
+			<div id="searchResults">
+			</div>
+
+			<!-- example result -->
+		</div>
+		<script>
+			function typeFilterGenerator(results) {
+				var prtypes = results.flatMap((x) => new Set(x.args.map((y) => y[1])));
+				var types = Array.from(new Set(prtypes.flatMap((x) => Array.from(x))));
+				return types.map((x) => ({
+					"question":`Should the theorem take a ${x} as an argument?`,
+					"filter":`arg:"${x}"`,
+					// not implementing wildcard here
+					// because we don't use it
+					"func": (r) => r.args.some((y) => y[1]==x)
+				}));
+			}
+			function locationFilterGenerator(results) {
+				// top level filter only for now
+				var tops = Array.from(new Set(results.map((x) => x.location.split(".")[0])));
+				return tops.map((x) => ({
+					"question":`Should the theorem be from ${x}.*?`,
+					"filter":`in:"${x}"`,
+					"func": (r) => r.location.split(".")[0]==x
+				}));
+			}
+
+			function testFilter(results,filter) {
+				/*
+				// a good filter should change the results the user is likely to read
+				if (!results.slice(0,5).some((x) => !filter.func(x))) {
+					return false;
+				}
+				*/
+				// a good filter should change many results but not exclude all of them
+				var remainder = results.filter(filter.func).length;
+				if (remainder < results.length*0.25 || remainder > results.length*0.75) {
+					return false;
+				}
+				return true;
+			}
+
+			function* filterGenerator(results) {
+				var filters = typeFilterGenerator(results).concat(locationFilterGenerator(results));
+				for (f of filters) {
+					if (testFilter(results,f)) {
+						yield f;
+					}
+				}
+			}
+			function promptFilter() {
+				var filter = filterGen.next();
+				if (filter.done) {
+					$("#refineBox").addClass("is-hidden");
+				} else {
+					$("#refineBox").removeClass("is-hidden");
+					$("#filterQuestion").html(filter.value.question);
+					window.currentFilter = filter.value;
+				}
+
+			}
+			function promptYes() {
+				$("#searchBox").val($("#searchBox").val()+ " " + window.currentFilter.filter);
+				search();
+			}
+
+			function promptNo() {
+				$("#searchBox").val($("#searchBox").val()+ " -" + window.currentFilter.filter);
+				search();
+			}
+		</script>
+		<script>
+			// enter should also search.
+			$("#searchBox").on("keypress",function(e){
+				if (e.which==13) {
+					search();
+				}
+			});
+
+
+			function search() {
+				var searchButton = document.getElementById("searchButton");
+				var queryBox = document.getElementById("searchBox");
+				searchButton.setAttribute("class","button is-primary is-loading");
+				if (queryBox.value=="") {
+					return;
+				}
+				$.post("/api/search",queryBox.value)
+				.done(function(data){
+					console.log(data);
+					$("#searchResults").empty()
+					searchButton.setAttribute("class","button is-primary");
+					if (data["info"] != "") {
+						$("#searchResults").append(`
+							<article class="message is-info">
+							<div class="message-header">
+								<p>Information</p>
+							</div>
+							<div class="message-body">
+								${data.info}
+							</div>
+							</article>
+						`);
+					}
+					window.results = data["results"];
+					for (var x = 0; x < Math.min(30,data["results"].length); x++) {
+						var result = data["results"][x];
+						var argsString = "";
+						for (var a = result.args.length-1; a >= 0; a--) {
+							//if (!result.args[a][1].startsWith("(")) {
+								// filter out complex types which OUGHT to be explicit
+								// in the theorem definition
+								argsString = argsString + `<code class="has-text-black">${result.args[a][0]}:${result.args[a][1]}</code> `;
+							//}
+						}
+						$("#searchResults").append(`
+							<div class="card has-shadow mb-4">
+							<div class="card-header">
+								<p class="card-header-title is-family-monospace">
+									${result.location}
+								</p> 
+							</div>
+							<div class="card-content">
+								<code class="has-text-black">
+								${$("<code class=\"has-text-black\">").text(result.text).html()}
+								</code>
+								${argsString.length>0 ? "<br>with args: " + argsString : ""}
+							</div>
+							<div class="card-footer">
+								<a class="card-footer-item" href="${result.homepage}"> <span class="icon-text"> <span class="icon"> <img src="/static/home-outline.svg"/> </span> <span> Homepage </span> </span>  </a>
+								${result.weird||!data.docs_available?"":"<a class=\"card-footer-item\" href=\"/doc/"+result.filepath+".html#"+result.modpath+"\"> <span class=\"icon-text\"> <span class=\"icon\"> <img src=\"/static/file-document-outline.svg\"/> </span> <span> Docs </span> </span>  </a>"}
+								<a class="card-footer-item" onclick="searchRelated(${x})"> <span class="icon-text"> <span class="icon"> <img src="/static/approximately-equal.svg"/> </span> <span> Related </span> </span>  </a>
+							</div>
+							</div>
+						`);
+					}
+					window.filterGen = filterGenerator(results);
+					promptFilter();
+				})
+				.fail(function(xhr,status,error){
+					$("#refineBox").addClass("is-hidden");
+					$("#searchResults").empty();
+					$("#searchResults").append(`
+						<article class="message is-danger">
+						<div class="message-header">
+							<p>Server Error</p>
+						</div>
+						<div class="message-body">
+							There was a fault in the search procedure. Please report what you were doing in feedback!
+						</div>
+						</article>
+					`);
+
+				});
+			}
+
+
+			function searchRelated(x) {
+				$("#searchBox").val(window.results[x].text);
+				search();
+			}
+		</script>
+		<div id="comment-modal" class="modal">
+			<div class="modal-background" onclick="commentClose()"></div>
+			<div class="modal-card">
+				<header class="modal-card-head"><strong class="modal-card-title">Leave Feedback</strong></header>
+				<section class="modal-card-body">
+					Positive and/or constructive feedback encouraged!<br>
+					Feedback will only be associated with your UUID and cohort<br> unless you choose to provide more information.<br>
+					You will not receive a reply unless you provide means to do so.<br>
+					<div class="field"><input class="input" id="commentBox" type="textarea"></div>
+					<div class="field"><button class="button" id="commentSubmitButton" onclick="commentSubmit()">Submit</button></div>
+				</section>
+				<footer class="modal-card-foot"></footer>
+			</div>
+			<button class="modal-close is-large" onclick="commentClose()"></button>
+		</div>
+		<script>
+			var commentModal = document.getElementById("comment-modal");
+			function commentOpen() {
+				commentModal.setAttribute("class","modal is-active");
+			}
+
+			function commentClose() {
+				commentModal.setAttribute("class","modal");
+			}
+
+			function commentSubmit() {
+				var commentBox = document.getElementById("commentBox");
+				var btn = document.getElementById("commentSubmitButton");
+				btn.setAttribute("class","button is-loading");
+				$.post("/api/feedback",commentBox.value,function() {
+					btn.setAttribute("class","button");
+					commentBox.value = "";
+					commentClose();
+				});
+			}
+		</script>
+		<div id="consent-modal" class="modal">
+			<div class="modal-background"></div>
+			<div class="modal-card">
+				<header class="modal-card-head">
+					<strong class="modal-card-title is-danger">RESEARCH RELEASE NOTICE</strong>
+				</header>
+				<section class="modal-card-body">
+					<p>This is a (beta) research release of a natural language search engine for Coq.<br> Expect less-than-optimal results and reliability!<br>
+					By participating in this software trial you consent to the use of cookies as well as the logging and possibly publication of your interactions with this website.<br>
+					Your interactions will be associated with a random UUID as well as the following cohort: <p id="cohortLabel">(hold on a second...)</p></p>
+
+				</section>
+				<footer class="modal-card-foot">
+				<div class="field is-grouped">
+					<button class="button is-success" onclick="cookieAgree()">I agree</button>
+					<button class="button is-danger" onclick="cookieReject()">I do not agree</button>
+				</div>
+				</footer>
+			</div>
+		</div>
+		<script>
+			var consentModal = document.getElementById("consent-modal");
+
+			var params = new URLSearchParams(window.location.search);
+			
+			if (params.get("cohort") === null) {
+				var cohort = "default";
+			} else {
+				var cohort = params.get("cohort");
+			}
+
+			document.getElementById("cohortLabel").innerHTML=cohort;
+
+			function cookieAgree() {
+				document.cookie = "uuid="+crypto.randomUUID()+"; max-age=31536000; path=/";
+				document.cookie = "cohort="+cohort+"; max-age=31536000; path=/";
+				consentModal.setAttribute("class","modal")
+			}
+
+			function cookieReject() {
+				history.back()
+				// ok we're still here for some reason (no history)
+				document.write('<h1 id="unhappy" style="">&#128579;<h1><script>var c = 30; window.setInterval(function() {document.getElementById("unhappy").setAttribute("style","text-align:center;font-size:"+c+"px;");c += 1;},250);<\/script>');
+			}
+			var presentCookies = (new Set(document.cookie.split("; ").map(function(x){return x.split("=")[0]})))
+			if (!(presentCookies.has("cohort") && presentCookies.has("uuid"))) {
+				// ask for permission
+				consentModal.setAttribute("class","modal is-active");
+			} else {
+				if (document.cookie.includes("default") && cohort != "default") {
+					// cohort update
+					document.cookie = "cohort="+cohort+"; max-age=31536000; path=/";
+				}
+			}
+		</script>
+	</body>
+</html>
+
+
