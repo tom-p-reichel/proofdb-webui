@@ -44,9 +44,9 @@ else:
 
 class GPUSearch(SearchBase):
     async def setup(self):
-        self.model = LlamaModel.from_pretrained("./model/half-model",load_in_4bit=True,bnb_4bit_compute_dtype=torch.float16)
-        self.model.load_adapter("./model/adapter/")
-        self.tokenizer = AutoTokenizer.from_pretrained("./model/base_model")
+        self.model = LlamaModel.from_pretrained(config.base,load_in_4bit=True,bnb_4bit_compute_dtype=torch.float16)
+        self.model.load_adapter(config.adapter)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.base)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.vecs = torch.load("./db/vecs.pt",map_location="cuda").half()
         self.projection = torch.load("./db/projection.pt",map_location="cuda").half()
@@ -332,7 +332,7 @@ async def search(uuid: cookiestr, cohort: cookiestr, query : Annotated[str,Body(
 
     if len(results)>0:
         best_score = results[0][1]
-        if best_score < 0.9:
+        if best_score < 0.80:
             info = "Your search query seemed difficult or vague to the model. We aren't confident in the results below. The model could be misbehaving or maybe there actually aren't any particularly relevant theorems. You might be able to get better results using tips on the <a href='/help'>help page</a>."
     else:
         info = "There were no results. Maybe you wrote a filter that was too strict?"

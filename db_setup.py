@@ -40,7 +40,7 @@ async def runcmd(cmd):
 
 
 # INIT SQLITE DB ****************************************************
-con = sql.connect("log.db")
+con = sql.connect("./db/log.db")
 
 cur = con.cursor()
 
@@ -168,8 +168,13 @@ coq_init_minimal = 'Require Import Coq.Init.Logic. Require Import Coq.Init.Ltac.
 
 hyps_found = 0
 
+thms_dropped = 0
+files_dropped = 0
+
 async def process_defs(f):
     global theorems
+    global thms_dropped
+    global files_dropped
     code,stdout = await runcmd(f"coqdoc --no-glob --no-externals --raw -s -g --stdout \"{f}\"")
     docs = stdout.decode()
     # QUIRK: prism code can't handle parsing a document with no sentences.
@@ -190,6 +195,7 @@ async def process_defs(f):
                 theorems[f].append((path,ss))
                             
     except Exception:
+        files_dropped += 1
         print(f"whoops in {f}:")
         print(traceback.format_exc())
         print(docs)
@@ -207,6 +213,8 @@ async def process_defs(f):
             print("import failed",err)
             if f in theorems:
                 del theorems[f]
+            # log error
+            files_dropped += 1
             return
         flags = ["-noinit"]
 
@@ -258,6 +266,7 @@ async def process_defs(f):
             if thm_name not in env.keys():
                 # TODO: this is a side effect of mysterious duplicates.
                 # fix it!
+                thms_dropped += 1
                 continue
             _,err = await coq.run(f"""Goal True.
             pose (@{thm_name}) as H.
@@ -271,12 +280,18 @@ async def process_defs(f):
                 print(f"setup failed in {filepath} for {thm_name}.")
                 print(err)
                 coq.close()
+                thms_dropped += 1
                 coq = CoqProcess(*flags)
                 #await coq.run(coq_init_minimal)
                 await coq.run("Require Import {filepath}.")
             else:
                 hyps_raw,err = await coq.run(print_hyps_ltac,return_stderr=True)
-                assert("Error" not in err)
+                if ("Error" in err):
+                    # really, really weird. bailing on this theorem.
+                    # we successfully know the name of the theorem and were
+                    # able to manipulate it, but we can't do this last step.
+                    thms_dropped += 1
+                    continue
                 #print(hyps_raw)
                 global hyps_found
                 hyps_found += 1
@@ -333,11 +348,12 @@ aio.run(map_n(process_defs,files,n=n,timeout=60))
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.llama.modeling_llama import LlamaModel
 import torch
+import config
 
-model = LlamaModel.from_pretrained("./model/base_model",load_in_4bit=True,bnb_4bit_compute_dtype=torch.float16)
-model.load_adapter("./model/adapter/")
+model = LlamaModel.from_pretrained(config.base,load_in_4bit=True,bnb_4bit_compute_dtype=torch.float16)
+model.load_adapter(config.adapter)
 
-tokenizer = AutoTokenizer.from_pretrained("./model/base_model")
+tokenizer = AutoTokenizer.from_pretrained(config.base)
 
 #thms_flat = sorted(list(itertools.chain.from_iterable(theorems.values())),key=lambda x: len(x), reverse=True)
 
@@ -366,11 +382,11 @@ vecs = torch.vstack([x[:,-1,:] for x in vecs])
 
 vecs = vecs/torch.linalg.norm(vecs,axis=1,keepdims=True)
 
-torch.save(vecs,"./vecs.pt")
+torch.save(vecs,"./db/vecs.pt")
 
 import json
 
-json.dump(db,open("./theorems.json","w"))
+json.dump(db,open("./db/theorems.json","w"))
 
 # generate random projection
 
@@ -383,3 +399,7 @@ proj = torch.zeros([bits,vecs.shape[1]])
 proj.normal_()
 
 torch.save(proj,"./db/projection.pt")
+
+print("files lost",files_dropped)
+print("theorems lost",thms_dropped)
+
