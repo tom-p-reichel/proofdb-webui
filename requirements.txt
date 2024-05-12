@@ -1,0 +1,6 @@
+fastapi
+aiosqlite
+ujson
+transformers
+torch
+goodinference @ git+https://github.com/tom-p-reichel/goodinference
