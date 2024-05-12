@@ -277,8 +277,6 @@ filter_pattern = re.compile(r"([^\s]+):([^\"\s]+|\"[^\"]+?\")")
 filter_pattern_noncapture = re.compile(r"(?:[^\s]+):(?:[^\"\s]+|\"[^\"]+?\")")
 @app.post("/api/search")
 async def search(uuid: cookiestr, cohort: cookiestr, query : Annotated[str,Body(...)], bg: BackgroundTasks):
-    if cohort not in ["labgroup","localdebug"]:
-        return JSONResponse(dict(info="You do not have a valid cohort. This software is only being demonstrated to a beta group. If you are in one of these groups, please revisit this page using the link I sent you-- apparently your cookie expired?"))
     if len(query)>600:
         await log(uuid,cohort,"error","too long query")
         return JSONResponse(dict(info="Your search query was too long to process."))
